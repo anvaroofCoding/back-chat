@@ -38,6 +38,7 @@ exports.createGroup = async (req, res) => {
 
 		// Create conversation for the group
 		const conversation = await Conversation.create({
+			type: 'group',
 			members: [owner],
 			groupId: group._id,
 		})
@@ -95,7 +96,8 @@ exports.updateGroup = async (req, res) => {
 
 		const updateData = { name, description }
 		if (req.file) {
-			updateData.avatar = `/uploads/${req.file.filename}`
+			const baseUrl = `${req.protocol}://${req.get('host')}`
+			updateData.avatar = `${baseUrl}/uploads/${req.file.filename}`
 		}
 
 		const updatedGroup = await Group.findByIdAndUpdate(groupId, updateData, {

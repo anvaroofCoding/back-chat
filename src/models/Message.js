@@ -10,6 +10,11 @@ const messageSchema = new mongoose.Schema(
 			type: mongoose.Schema.Types.ObjectId,
 			ref: 'Conversation',
 		},
+		replyTo: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: 'Message',
+			default: null,
+		},
 		text: String,
 		files: [
 			{
@@ -22,6 +27,17 @@ const messageSchema = new mongoose.Schema(
 			url: String,
 			filename: String,
 			mimetype: String,
+		},
+		video: [
+			{
+				url: String,
+				filename: String,
+				mimetype: String,
+			},
+		],
+		is_read: {
+			type: Boolean,
+			default: false,
 		},
 		read: {
 			type: Boolean,

@@ -25,6 +25,9 @@ const authMiddleware = require('../middleware/auth')
  *                 description: ID of the group (alternative to conversationId)
  *               text:
  *                 type: string
+ *               replyTo:
+ *                 type: string
+ *                 description: Message ID being replied to (Telegram-style reply)
  *               files:
  *                 type: array
  *                 items:
@@ -33,6 +36,11 @@ const authMiddleware = require('../middleware/auth')
  *               audio:
  *                 type: string
  *                 format: binary
+ *               video:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                   format: binary
  *     responses:
  *       200:
  *         description: Message sent
@@ -67,6 +75,58 @@ router.post(
  *         description: Unauthorized
  */
 router.get('/:conversationId', authMiddleware, messageController.getMessages)
+
+/**
+ * @swagger
+ * /api/messages/{messageId}/read:
+ *   put:
+ *     summary: Mark one message as read
+ *     tags: [Messages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: messageId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Message marked as read
+ *       403:
+ *         description: Access denied
+ */
+router.put(
+	'/:messageId/read',
+	authMiddleware,
+	messageController.markMessageAsRead,
+)
+
+/**
+ * @swagger
+ * /api/messages/conversations/{conversationId}/read:
+ *   put:
+ *     summary: Mark unread messages in a conversation as read
+ *     tags: [Messages]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: conversationId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Conversation unread messages marked as read
+ *       403:
+ *         description: Access denied
+ */
+router.put(
+	'/conversations/:conversationId/read',
+	authMiddleware,
+	messageController.markConversationAsRead,
+)
 
 /**
  * @swagger

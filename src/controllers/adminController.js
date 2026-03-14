@@ -1,5 +1,10 @@
 const User = require('../models/User')
 const bcrypt = require('bcryptjs')
+const Conversation = require('../models/Conversation')
+const Message = require('../models/Message')
+const Group = require('../models/Group')
+
+// ─── Users ────────────────────────────────────────────────────────────────────
 
 exports.getPendingUsers = async (req, res) => {
 	try {
@@ -19,21 +24,38 @@ exports.getAllUsers = async (req, res) => {
 	}
 }
 
+exports.getUser = async (req, res) => {
+	try {
+		const user = await User.findById(req.params.userId).select('-password')
+		if (!user) return res.status(404).json({ message: 'User not found' })
+		res.json(user)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
 exports.updateUser = async (req, res) => {
 	try {
 		const { userId } = req.params
 		const updateData = { ...req.body }
-
 		if (updateData.password) {
 			updateData.password = await bcrypt.hash(updateData.password, 10)
 		}
-
 		const user = await User.findByIdAndUpdate(userId, updateData, {
 			new: true,
 			runValidators: true,
 		}).select('-password')
-
+		if (!user) return res.status(404).json({ message: 'User not found' })
 		res.json(user)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.deleteUser = async (req, res) => {
+	try {
+		await User.findByIdAndDelete(req.params.userId)
+		res.json({ message: 'User deleted' })
 	} catch (error) {
 		res.status(500).json(error)
 	}
@@ -41,9 +63,8 @@ exports.updateUser = async (req, res) => {
 
 exports.approveUser = async (req, res) => {
 	try {
-		const { userId } = req.params
 		const user = await User.findByIdAndUpdate(
-			userId,
+			req.params.userId,
 			{ isApproved: true },
 			{ new: true },
 		).select('-password')
@@ -55,9 +76,148 @@ exports.approveUser = async (req, res) => {
 
 exports.rejectUser = async (req, res) => {
 	try {
-		const { userId } = req.params
-		await User.findByIdAndDelete(userId)
+		await User.findByIdAndDelete(req.params.userId)
 		res.json({ message: 'User rejected and deleted' })
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+// ─── Conversations ────────────────────────────────────────────────────────────
+
+exports.getAllConversations = async (req, res) => {
+	try {
+		const { type, search, from, to } = req.query
+		const filter = {}
+		if (type === 'private' || type === 'group') filter.type = type
+		if (from || to) {
+			filter.lastMessageAt = {}
+			if (from) filter.lastMessageAt.$gte = new Date(from)
+			if (to) filter.lastMessageAt.$lte = new Date(to)
+		}
+
+		let conversations = await Conversation.find(filter)
+			.populate('members', 'firstname lastname avatar')
+			.populate('groupId', 'name description avatar')
+			.populate({
+				path: 'lastMessage',
+				populate: { path: 'sender', select: 'firstname lastname' },
+			})
+			.sort({ lastMessageAt: -1 })
+
+		if (search) {
+			const s = search.toLowerCase()
+			conversations = conversations.filter(c => {
+				if (c.type === 'group')
+					return c.groupId && c.groupId.name.toLowerCase().includes(s)
+				return c.members.some(m =>
+					`${m.firstname} ${m.lastname}`.toLowerCase().includes(s),
+				)
+			})
+		}
+
+		res.json(conversations)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.deleteConversation = async (req, res) => {
+	try {
+		const { conversationId } = req.params
+		await Message.deleteMany({ conversationId })
+		await Conversation.findByIdAndDelete(conversationId)
+		res.json({ message: 'Conversation and all messages deleted' })
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+// ─── Messages ─────────────────────────────────────────────────────────────────
+
+exports.getAllMessages = async (req, res) => {
+	try {
+		const { conversationId } = req.query
+		const filter = conversationId ? { conversationId } : {}
+		const messages = await Message.find(filter)
+			.populate('sender', 'firstname lastname avatar')
+			.populate('conversationId', 'type')
+			.populate({
+				path: 'replyTo',
+				select: 'text files audio video createdAt sender',
+				populate: { path: 'sender', select: 'firstname lastname avatar' },
+			})
+			.sort({ createdAt: -1 })
+		res.json(messages)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.adminDeleteMessage = async (req, res) => {
+	try {
+		await Message.findByIdAndDelete(req.params.messageId)
+		res.json({ message: 'Message deleted' })
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.adminEditMessage = async (req, res) => {
+	try {
+		const message = await Message.findByIdAndUpdate(
+			req.params.messageId,
+			{ text: req.body.text },
+			{ new: true },
+		)
+			.populate('sender', 'firstname lastname avatar')
+			.populate({
+				path: 'replyTo',
+				select: 'text files audio video createdAt sender',
+				populate: { path: 'sender', select: 'firstname lastname avatar' },
+			})
+		if (!message) return res.status(404).json({ message: 'Message not found' })
+		res.json(message)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+// ─── Groups ───────────────────────────────────────────────────────────────────
+
+exports.getAllGroups = async (req, res) => {
+	try {
+		const groups = await Group.find()
+			.populate('owner', 'firstname lastname')
+			.populate('members', 'firstname lastname avatar')
+		res.json(groups)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.adminUpdateGroup = async (req, res) => {
+	try {
+		const group = await Group.findByIdAndUpdate(req.params.groupId, req.body, {
+			new: true,
+		})
+		if (!group) return res.status(404).json({ message: 'Group not found' })
+		res.json(group)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.adminDeleteGroup = async (req, res) => {
+	try {
+		const { groupId } = req.params
+		const conversation = await Conversation.findOne({ groupId })
+		if (conversation) {
+			await Message.deleteMany({ conversationId: conversation._id })
+			await Conversation.findByIdAndDelete(conversation._id)
+		}
+		await Group.findByIdAndDelete(groupId)
+		res.json({ message: 'Group, conversation and messages deleted' })
 	} catch (error) {
 		res.status(500).json(error)
 	}

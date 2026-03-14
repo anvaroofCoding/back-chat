@@ -37,7 +37,8 @@ exports.updateProfile = async (req, res) => {
 		const updateData = { firstname, lastname, birthday, biography, job }
 
 		if (req.file) {
-			updateData.avatar = `/uploads/${req.file.filename}`
+			const baseUrl = `${req.protocol}://${req.get('host')}`
+			updateData.avatar = `${baseUrl}/uploads/${req.file.filename}`
 		}
 
 		const user = await User.findByIdAndUpdate(req.user.id, updateData, {
