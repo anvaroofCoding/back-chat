@@ -4,6 +4,57 @@ const authMiddleware = require('../middleware/auth')
 
 /**
  * @swagger
+ * /api/users:
+ *   get:
+ *     summary: Get all users (public) with search
+ *     tags: [Users]
+ *     parameters:
+ *       - in: query
+ *         name: search
+ *         schema:
+ *           type: string
+ *         description: Search across email, firstname, lastname
+ *       - in: query
+ *         name: email
+ *         schema:
+ *           type: string
+ *         description: Filter by email (partial, case-insensitive)
+ *       - in: query
+ *         name: firstname
+ *         schema:
+ *           type: string
+ *         description: Filter by firstname (partial, case-insensitive)
+ *       - in: query
+ *         name: lastname
+ *         schema:
+ *           type: string
+ *         description: Filter by lastname (partial, case-insensitive)
+ *     responses:
+ *       200:
+ *         description: List of all users
+ */
+router.get('/', userController.getUsers)
+
+/**
+ * @swagger
+ * /api/users/{userId}:
+ *   get:
+ *     summary: Get a user profile by ID (public)
+ *     tags: [Users]
+ *     parameters:
+ *       - in: path
+ *         name: userId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: User profile
+ *       404:
+ *         description: User not found
+ */
+/**
+ * @swagger
  * /api/users/profile:
  *   get:
  *     summary: Get user profile
@@ -53,5 +104,7 @@ router.put(
 	userController.uploadAvatar,
 	userController.updateProfile,
 )
+
+router.get('/:userId', userController.getUserProfileById)
 
 module.exports = router

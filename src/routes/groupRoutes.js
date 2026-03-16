@@ -142,7 +142,7 @@ router.delete('/:groupId', authMiddleware, groupController.deleteGroup)
  * @swagger
  * /api/groups/{groupId}/members:
  *   post:
- *     summary: Add member to group (owner only)
+ *     summary: Add one or multiple members to group (owner/admin)
  *     tags: [Groups]
  *     security:
  *       - bearerAuth: []
@@ -158,14 +158,18 @@ router.delete('/:groupId', authMiddleware, groupController.deleteGroup)
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - userId
  *             properties:
  *               userId:
  *                 type: string
+ *                 description: Single user id (backward compatible)
+ *               userIds:
+ *                 type: array
+ *                 description: Multiple user ids to add at once
+ *                 items:
+ *                   type: string
  *     responses:
  *       200:
- *         description: Member added
+ *         description: Members added
  *       403:
  *         description: Only owner can add members
  *       401:

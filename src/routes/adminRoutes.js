@@ -10,6 +10,145 @@ const adminOnly = (req, res, next) => {
 
 const guard = [auth, adminOnly]
 
+// ─── Admins ───────────────────────────────────────────────────────────────────
+
+/**
+ * @swagger
+ * /api/admin/admins:
+ *   post:
+ *     summary: Create a new admin
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - firstname
+ *               - lastname
+ *               - birthday
+ *               - email
+ *               - password
+ *               - biography
+ *               - job
+ *             properties:
+ *               firstname:
+ *                 type: string
+ *               lastname:
+ *                 type: string
+ *               birthday:
+ *                 type: string
+ *                 format: date
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               biography:
+ *                 type: string
+ *               job:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Admin created
+ */
+router.post('/admins', ...guard, a.createAdmin)
+
+/**
+ * @swagger
+ * /api/admin/admins:
+ *   get:
+ *     summary: Get all admins
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: List of admins
+ */
+router.get('/admins', ...guard, a.getAdmins)
+
+/**
+ * @swagger
+ * /api/admin/admins/{adminId}:
+ *   get:
+ *     summary: Get admin by id
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adminId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Admin details
+ */
+router.get('/admins/:adminId', ...guard, a.getAdminById)
+
+/**
+ * @swagger
+ * /api/admin/admins/{adminId}:
+ *   put:
+ *     summary: Update admin
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adminId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     requestBody:
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               firstname:
+ *                 type: string
+ *               lastname:
+ *                 type: string
+ *               birthday:
+ *                 type: string
+ *                 format: date
+ *               biography:
+ *                 type: string
+ *               job:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Admin updated
+ */
+router.put('/admins/:adminId', ...guard, a.updateAdmin)
+
+/**
+ * @swagger
+ * /api/admin/admins/{adminId}:
+ *   delete:
+ *     summary: Delete admin
+ *     tags: [Admin]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: adminId
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Admin deleted
+ */
+router.delete('/admins/:adminId', ...guard, a.deleteAdmin)
+
 // ─── Users ────────────────────────────────────────────────────────────────────
 
 /**

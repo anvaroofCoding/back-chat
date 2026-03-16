@@ -1,6 +1,7 @@
 const Group = require('../models/Group')
 const Conversation = require('../models/Conversation')
 const User = require('../models/User')
+const mongoose = require('mongoose')
 const multer = require('multer')
 const path = require('path')
 
@@ -137,7 +138,7 @@ exports.deleteGroup = async (req, res) => {
 exports.addMember = async (req, res) => {
 	try {
 		const { groupId } = req.params
-		const { userId } = req.body
+		const { userId, userIds } = req.body
 		const ownerId = req.user.id
 		const isAdmin = req.user.isAdmin
 
@@ -151,25 +152,71 @@ exports.addMember = async (req, res) => {
 				.json({ message: 'Only owner or admin can add members' })
 		}
 
-		const user = await User.findById(userId)
-		if (!user) {
-			return res.status(404).json({ message: 'User not found' })
+		const rawUserIds = []
+		if (typeof userId === 'string' && userId.trim()) {
+			rawUserIds.push(userId.trim())
+		}
+		if (Array.isArray(userIds)) {
+			for (const id of userIds) {
+				if (typeof id === 'string' && id.trim()) {
+					rawUserIds.push(id.trim())
+				}
+			}
 		}
 
-		if (group.members.includes(userId)) {
-			return res.status(400).json({ message: 'User already in group' })
+		const uniqueUserIds = [...new Set(rawUserIds)]
+		if (uniqueUserIds.length === 0) {
+			return res.status(400).json({
+				message: 'Provide at least one user id in userId or userIds[]',
+			})
 		}
 
-		group.members.push(userId)
+		const invalidIds = uniqueUserIds.filter(
+			id => !mongoose.Types.ObjectId.isValid(id),
+		)
+		if (invalidIds.length > 0) {
+			return res.status(400).json({
+				message: 'Some user ids are invalid',
+				invalidUserIds: invalidIds,
+			})
+		}
+
+		const foundUsers = await User.find({ _id: { $in: uniqueUserIds } }).select(
+			'_id',
+		)
+		const foundUserIdSet = new Set(foundUsers.map(user => user._id.toString()))
+		const missingUserIds = uniqueUserIds.filter(id => !foundUserIdSet.has(id))
+		if (missingUserIds.length > 0) {
+			return res.status(404).json({
+				message: 'Some users were not found',
+				missingUserIds,
+			})
+		}
+
+		const existingMemberIds = new Set(group.members.map(id => id.toString()))
+		const userIdsToAdd = uniqueUserIds.filter(id => !existingMemberIds.has(id))
+
+		if (userIdsToAdd.length === 0) {
+			return res.status(400).json({
+				message: 'All provided users are already in group',
+			})
+		}
+
+		group.members.push(...userIdsToAdd)
 		await group.save()
 
 		// Update conversation members
 		await Conversation.findOneAndUpdate(
 			{ groupId },
-			{ $addToSet: { members: userId } },
+			{ $addToSet: { members: { $each: userIdsToAdd } } },
 		)
 
-		res.json(group)
+		res.json({
+			message: 'Members added successfully',
+			addedCount: userIdsToAdd.length,
+			addedUserIds: userIdsToAdd,
+			group,
+		})
 	} catch (error) {
 		res.status(500).json(error)
 	}

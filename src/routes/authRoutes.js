@@ -116,6 +116,50 @@ router.post('/logout', authController.logout)
 
 /**
  * @swagger
+ * /api/auth/bootstrap-admin:
+ *   post:
+ *     summary: Create an admin (public endpoint)
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - firstname
+ *               - lastname
+ *               - birthday
+ *               - email
+ *               - password
+ *               - biography
+ *               - job
+ *             properties:
+ *               firstname:
+ *                 type: string
+ *               lastname:
+ *                 type: string
+ *               birthday:
+ *                 type: string
+ *                 format: date
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *               biography:
+ *                 type: string
+ *               job:
+ *                 type: string
+ *     responses:
+ *       201:
+ *         description: Admin created
+ *       400:
+ *         description: User already exists
+ */
+router.post('/bootstrap-admin', authController.bootstrapAdmin)
+
+/**
+ * @swagger
  * /api/auth:
  *   get:
  *     summary: Get auth API info
@@ -125,7 +169,10 @@ router.post('/logout', authController.logout)
  *         description: Auth endpoints info
  */
 router.get('/', (req, res) => {
-	res.json({ message: 'Auth API endpoints: POST /register, POST /login' })
+	res.json({
+		message:
+			'Auth API endpoints: POST /register, POST /login, POST /bootstrap-admin',
+	})
 })
 
 module.exports = router

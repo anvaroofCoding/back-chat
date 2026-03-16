@@ -83,6 +83,124 @@ exports.rejectUser = async (req, res) => {
 	}
 }
 
+exports.createAdmin = async (req, res) => {
+	try {
+		const { firstname, lastname, birthday, email, password, biography, job } =
+			req.body
+
+		const existingUser = await User.findOne({ email })
+		if (existingUser) {
+			return res.status(400).json({ message: 'User already exists' })
+		}
+
+		const hashedPassword = await bcrypt.hash(password, 10)
+		const admin = await User.create({
+			firstname,
+			lastname,
+			birthday,
+			email,
+			password: hashedPassword,
+			biography,
+			job,
+			isAdmin: true,
+			isApproved: true,
+		})
+
+		res.status(201).json({
+			message: 'Admin created successfully',
+			admin: {
+				id: admin._id,
+				firstname: admin.firstname,
+				lastname: admin.lastname,
+				email: admin.email,
+				isAdmin: admin.isAdmin,
+				isApproved: admin.isApproved,
+			},
+		})
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.getAdmins = async (req, res) => {
+	try {
+		const admins = await User.find({ isAdmin: true }).select('-password')
+		res.json(admins)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.getAdminById = async (req, res) => {
+	try {
+		const admin = await User.findOne({
+			_id: req.params.adminId,
+			isAdmin: true,
+		}).select('-password')
+
+		if (!admin) {
+			return res.status(404).json({ message: 'Admin not found' })
+		}
+
+		res.json(admin)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.updateAdmin = async (req, res) => {
+	try {
+		const { adminId } = req.params
+		const updateData = { ...req.body }
+
+		if (updateData.password) {
+			updateData.password = await bcrypt.hash(updateData.password, 10)
+		}
+
+		updateData.isAdmin = true
+
+		const admin = await User.findOneAndUpdate(
+			{ _id: adminId, isAdmin: true },
+			updateData,
+			{
+				new: true,
+				runValidators: true,
+			},
+		).select('-password')
+
+		if (!admin) {
+			return res.status(404).json({ message: 'Admin not found' })
+		}
+
+		res.json(admin)
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
+exports.deleteAdmin = async (req, res) => {
+	try {
+		const { adminId } = req.params
+
+		if (req.user.id === adminId) {
+			return res.status(400).json({ message: 'You cannot delete yourself' })
+		}
+
+		const deletedAdmin = await User.findOneAndDelete({
+			_id: adminId,
+			isAdmin: true,
+		})
+
+		if (!deletedAdmin) {
+			return res.status(404).json({ message: 'Admin not found' })
+		}
+
+		res.json({ message: 'Admin deleted successfully' })
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
+
 // ─── Conversations ────────────────────────────────────────────────────────────
 
 exports.getAllConversations = async (req, res) => {

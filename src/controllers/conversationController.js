@@ -205,7 +205,15 @@ exports.getConversation = async (req, res) => {
 
 		const conversation = await Conversation.findById(conversationId)
 			.populate('members', 'firstname lastname avatar isOnline')
-			.populate('groupId', 'name description avatar owner')
+			.populate({
+				path: 'groupId',
+				select: 'name description avatar owner members createdAt updatedAt',
+				populate: {
+					path: 'owner',
+					select:
+						'firstname lastname birthday email biography job avatar isApproved isAdmin isOnline lastSeen createdAt updatedAt',
+				},
+			})
 			.populate({
 				path: 'lastMessage',
 				populate: { path: 'sender', select: 'firstname lastname' },

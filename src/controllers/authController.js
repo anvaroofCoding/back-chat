@@ -97,3 +97,42 @@ exports.logout = async (req, res) => {
 		res.status(500).json(error)
 	}
 }
+
+exports.bootstrapAdmin = async (req, res) => {
+	try {
+		const { firstname, lastname, birthday, email, password, biography, job } =
+			req.body
+
+		const existingUser = await User.findOne({ email })
+		if (existingUser) {
+			return res.status(400).json({ message: 'User already exists' })
+		}
+
+		const hashedPassword = await bcrypt.hash(password, 10)
+		const admin = await User.create({
+			firstname,
+			lastname,
+			birthday,
+			email,
+			password: hashedPassword,
+			biography,
+			job,
+			isAdmin: true,
+			isApproved: true,
+		})
+
+		res.status(201).json({
+			message: 'Admin created successfully',
+			admin: {
+				id: admin._id,
+				firstname: admin.firstname,
+				lastname: admin.lastname,
+				email: admin.email,
+				isAdmin: admin.isAdmin,
+				isApproved: admin.isApproved,
+			},
+		})
+	} catch (error) {
+		res.status(500).json(error)
+	}
+}
