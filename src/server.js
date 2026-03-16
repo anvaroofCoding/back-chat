@@ -105,7 +105,13 @@ io.on('connection', socket => {
 		const source =
 			payload.user && typeof payload.user === 'object' ? payload.user : payload
 		const userId =
-			source.userId || source.id || payload.userId || payload.id || null
+			source.userId ||
+			source.id ||
+			source._id ||
+			payload.userId ||
+			payload.id ||
+			payload._id ||
+			null
 		const firstname = source.firstname || payload.firstname || ''
 		const lastname = source.lastname || payload.lastname || ''
 		const fullName =
@@ -120,15 +126,30 @@ io.on('connection', socket => {
 		}
 	}
 
+	const normalizeId = value => {
+		if (!value) return null
+		if (typeof value === 'string' || typeof value === 'number') {
+			return String(value)
+		}
+		if (typeof value === 'object') {
+			if (value._id) return String(value._id)
+			if (value.id) return String(value.id)
+		}
+		return null
+	}
+
 	const resolveConversationId = payload => {
 		if (!payload) return null
-		if (typeof payload === 'string') return payload
+		if (typeof payload === 'string' || typeof payload === 'number') {
+			return String(payload)
+		}
 		if (typeof payload === 'object') {
 			return (
-				payload.conversationId ||
-				payload.roomId ||
-				payload.chatId ||
-				payload.id ||
+				normalizeId(payload.conversationId) ||
+				normalizeId(payload.roomId) ||
+				normalizeId(payload.chatId) ||
+				normalizeId(payload.id) ||
+				normalizeId(payload._id) ||
 				null
 			)
 		}
@@ -136,9 +157,10 @@ io.on('connection', socket => {
 	}
 
 	const ensureJoined = conversationId => {
-		if (!conversationId) return
-		socket.join(conversationId)
-		socket.data.activeConversations.add(conversationId)
+		const roomId = normalizeId(conversationId)
+		if (!roomId) return
+		socket.join(roomId)
+		socket.data.activeConversations.add(roomId)
 	}
 
 	const emitTypingStart = (conversationId, participant) => {
