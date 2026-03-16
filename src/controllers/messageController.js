@@ -21,6 +21,27 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage })
 
+const buildMessageRealtimePayload = message => {
+	const raw = message.toObject ? message.toObject() : message
+	const files = Array.isArray(raw.files) ? raw.files : []
+	const audio = raw.audio && raw.audio.url ? [raw.audio] : []
+	const video = Array.isArray(raw.video) ? raw.video : []
+
+	return {
+		id: raw._id,
+		messageId: raw._id,
+		conversationId: raw.conversationId,
+		sender: raw.sender,
+		text: raw.text || '',
+		attachments: [...files, ...audio, ...video],
+		files,
+		audio: raw.audio || null,
+		video,
+		replyTo: raw.replyTo || null,
+		createdAt: raw.createdAt,
+	}
+}
+
 exports.uploadFiles = upload.fields([
 	{ name: 'files', maxCount: 10 },
 	{ name: 'audio', maxCount: 1 },
@@ -121,8 +142,11 @@ exports.sendMessage = async (req, res) => {
 
 		// Emit to socket
 		const io = req.app.get('io')
-		io.to(targetConversationId.toString()).emit('receive_message', message)
-		io.to(targetConversationId.toString()).emit('message:new', message)
+		const roomId = targetConversationId.toString()
+		const realtimePayload = buildMessageRealtimePayload(message)
+		io.to(roomId).emit('receive_message', realtimePayload)
+		io.to(roomId).emit('message:new', realtimePayload)
+		io.to(roomId).emit('new_message', realtimePayload)
 
 		res.json(message)
 	} catch (error) {

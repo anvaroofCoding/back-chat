@@ -13,6 +13,28 @@ const adminRoutes = require('./routes/adminRoutes')
 const groupRoutes = require('./routes/groupRoutes')
 const sessionRoutes = require('./routes/sessionRoutes')
 
+const setupRedisAdapter = async io => {
+	if (!process.env.REDIS_URL) return
+
+	try {
+		const { createAdapter } = require('@socket.io/redis-adapter')
+		const { createClient } = require('redis')
+
+		const pubClient = createClient({ url: process.env.REDIS_URL })
+		const subClient = pubClient.duplicate()
+
+		await pubClient.connect()
+		await subClient.connect()
+
+		io.adapter(createAdapter(pubClient, subClient))
+		console.log('Socket.IO Redis adapter enabled')
+	} catch (error) {
+		console.log(
+			'Redis adapter is not enabled. Install @socket.io/redis-adapter and redis package to use horizontal scaling.',
+		)
+	}
+}
+
 const app = express()
 app.set('trust proxy', 1)
 
@@ -92,6 +114,8 @@ const io = new Server(server, {
 		origin: '*',
 	},
 })
+
+setupRedisAdapter(io)
 
 // Make io accessible in routes
 app.set('io', io)
