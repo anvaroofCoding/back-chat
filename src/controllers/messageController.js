@@ -156,6 +156,21 @@ exports.deleteMessage = async (req, res) => {
 		}
 
 		await Message.findByIdAndDelete(messageId)
+
+		const io = req.app.get('io')
+		io.to(message.conversationId._id.toString()).emit('message:deleted', {
+			messageId,
+			conversationId: message.conversationId._id,
+			deletedBy: userId,
+			deletedAt: new Date().toISOString(),
+		})
+		io.to(message.conversationId._id.toString()).emit('message_deleted', {
+			messageId,
+			conversationId: message.conversationId._id,
+			deletedBy: userId,
+			deletedAt: new Date().toISOString(),
+		})
+
 		res.json({ message: 'Message deleted' })
 	} catch (error) {
 		res.status(500).json(error)
@@ -190,6 +205,19 @@ exports.editMessage = async (req, res) => {
 
 		message.text = text
 		await message.save()
+
+		const io = req.app.get('io')
+		const conversationId = message.conversationId._id.toString()
+		const payload = {
+			messageId: message._id,
+			conversationId: message.conversationId._id,
+			text: message.text,
+			editedBy: userId,
+			editedAt: new Date().toISOString(),
+		}
+		io.to(conversationId).emit('message:updated', payload)
+		io.to(conversationId).emit('message_edited', payload)
+
 		res.json(message)
 	} catch (error) {
 		res.status(500).json(error)

@@ -102,80 +102,148 @@ io.on('connection', socket => {
 
 	const resolveParticipant = payload => {
 		if (!payload || typeof payload !== 'object') return null
-		const userId = payload.userId || payload.id || null
-		const firstname = payload.firstname || ''
-		const lastname = payload.lastname || ''
+		const source =
+			payload.user && typeof payload.user === 'object' ? payload.user : payload
+		const userId =
+			source.userId || source.id || payload.userId || payload.id || null
+		const firstname = source.firstname || payload.firstname || ''
+		const lastname = source.lastname || payload.lastname || ''
 		const fullName =
-			`${firstname} ${lastname}`.trim() || payload.name || 'Unknown'
-		return { userId, fullname: fullName, avatar: payload.avatar || null }
+			`${firstname} ${lastname}`.trim() ||
+			source.name ||
+			payload.name ||
+			'Unknown'
+		return {
+			userId,
+			fullname: fullName,
+			avatar: source.avatar || payload.avatar || null,
+		}
 	}
 
 	const resolveConversationId = payload => {
 		if (!payload) return null
 		if (typeof payload === 'string') return payload
 		if (typeof payload === 'object') {
-			return payload.conversationId || payload.roomId || null
+			return (
+				payload.conversationId ||
+				payload.roomId ||
+				payload.chatId ||
+				payload.id ||
+				null
+			)
 		}
 		return null
 	}
 
-	socket.on('join_conversation', payload => {
+	const ensureJoined = conversationId => {
+		if (!conversationId) return
+		socket.join(conversationId)
+		socket.data.activeConversations.add(conversationId)
+	}
+
+	const emitTypingStart = (conversationId, participant) => {
+		const payload = {
+			conversationId,
+			user: participant,
+			at: new Date().toISOString(),
+		}
+		socket.to(conversationId).emit('typing_start', payload)
+		socket.to(conversationId).emit('typing:start', payload)
+		socket.to(conversationId).emit('user_typing', payload)
+	}
+
+	const emitTypingStop = (conversationId, participant) => {
+		const payload = {
+			conversationId,
+			user: participant,
+			at: new Date().toISOString(),
+		}
+		socket.to(conversationId).emit('typing_stop', payload)
+		socket.to(conversationId).emit('typing:stop', payload)
+		socket.to(conversationId).emit('user_stop_typing', payload)
+	}
+
+	const emitMessageNew = messagePayload => {
+		const conversationId = resolveConversationId(messagePayload)
+		if (!conversationId) return
+		ensureJoined(conversationId)
+		socket.to(conversationId).emit('receive_message', messagePayload)
+		socket.to(conversationId).emit('message:new', messagePayload)
+		socket.to(conversationId).emit('new_message', messagePayload)
+		socket.to(conversationId).emit('message', messagePayload)
+	}
+
+	const handleJoinConversation = payload => {
 		const conversationId = resolveConversationId(payload)
 		if (!conversationId) return
 
 		const participant = resolveParticipant(payload)
 		if (participant) socket.data.participant = participant
 
-		socket.join(conversationId)
-		socket.data.activeConversations.add(conversationId)
+		ensureJoined(conversationId)
+		socket.emit('joined_conversation', {
+			conversationId,
+			at: new Date().toISOString(),
+		})
 		console.log(`User joined conversation ${conversationId}`)
-	})
+	}
 
-	socket.on('leave_conversation', payload => {
+	const handleLeaveConversation = payload => {
 		const conversationId = resolveConversationId(payload)
 		if (!conversationId) return
 
 		socket.leave(conversationId)
 		socket.data.activeConversations.delete(conversationId)
+		emitTypingStop(conversationId, socket.data.participant || null)
+	}
 
-		socket.to(conversationId).emit('typing_stop', {
-			conversationId,
-			user: socket.data.participant || null,
-			at: new Date().toISOString(),
-		})
-	})
-
-	socket.on('typing_start', payload => {
+	const handleTypingStart = payload => {
 		const conversationId = resolveConversationId(payload)
 		if (!conversationId) return
+		ensureJoined(conversationId)
 
 		const participant =
 			resolveParticipant(payload) || socket.data.participant || null
-		socket.to(conversationId).emit('typing_start', {
-			conversationId,
-			user: participant,
-			at: new Date().toISOString(),
-		})
-	})
+		emitTypingStart(conversationId, participant)
+	}
 
-	socket.on('typing_stop', payload => {
+	const handleTypingStop = payload => {
 		const conversationId = resolveConversationId(payload)
 		if (!conversationId) return
+		ensureJoined(conversationId)
 
 		const participant =
 			resolveParticipant(payload) || socket.data.participant || null
-		socket.to(conversationId).emit('typing_stop', {
-			conversationId,
-			user: participant,
-			at: new Date().toISOString(),
-		})
-	})
+		emitTypingStop(conversationId, participant)
+	}
 
-	socket.on('send_message', data => {
-		if (!data || !data.conversationId) return
-		socket.to(data.conversationId).emit('receive_message', data)
-		socket.to(data.conversationId).emit('message:new', data)
-	})
+	const handleSendMessage = data => {
+		const messagePayload =
+			data && typeof data === 'object' && data.message ? data.message : data
+		if (!messagePayload) return
+		emitMessageNew(messagePayload)
+	}
+
+	socket.on('join_conversation', handleJoinConversation)
+	socket.on('join_room', handleJoinConversation)
+	socket.on('joinRoom', handleJoinConversation)
+
+	socket.on('leave_conversation', handleLeaveConversation)
+	socket.on('leave_room', handleLeaveConversation)
+	socket.on('leaveRoom', handleLeaveConversation)
+
+	socket.on('typing_start', handleTypingStart)
+	socket.on('typing:start', handleTypingStart)
+	socket.on('typing', handleTypingStart)
+
+	socket.on('typing_stop', handleTypingStop)
+	socket.on('typing:stop', handleTypingStop)
+	socket.on('stop_typing', handleTypingStop)
+
+	socket.on('send_message', handleSendMessage)
+	socket.on('message:new', handleSendMessage)
+	socket.on('new_message', handleSendMessage)
+	socket.on('message:send', handleSendMessage)
 
 	socket.on('disconnect', () => {
 		if (
@@ -183,11 +251,7 @@ io.on('connection', socket => {
 			socket.data.activeConversations.size > 0
 		) {
 			for (const conversationId of socket.data.activeConversations) {
-				socket.to(conversationId).emit('typing_stop', {
-					conversationId,
-					user: socket.data.participant || null,
-					at: new Date().toISOString(),
-				})
+				emitTypingStop(conversationId, socket.data.participant || null)
 			}
 		}
 		console.log('User disconnected')
