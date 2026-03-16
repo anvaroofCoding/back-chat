@@ -14,6 +14,7 @@ const groupRoutes = require('./routes/groupRoutes')
 const sessionRoutes = require('./routes/sessionRoutes')
 
 const app = express()
+app.set('trust proxy', 1)
 
 // middleware
 app.use(
@@ -61,11 +62,17 @@ const options = {
 
 const specs = swaggerJsdoc(options)
 app.use('/api-docs', swaggerUi.serve, (req, res, next) => {
+	const forwardedProto = req.headers['x-forwarded-proto']
+	const protocol = (forwardedProto || req.protocol || 'http')
+		.toString()
+		.split(',')[0]
+		.trim()
+	const host = req.get('host')
 	const currentHostSpec = {
 		...specs,
 		servers: [
 			{
-				url: `${req.protocol}://${req.get('host')}`,
+				url: `${protocol}://${host}`,
 				description: 'Current server',
 			},
 		],
@@ -189,7 +196,7 @@ io.on('connection', socket => {
 
 // MongoDB
 mongoose
-	.connect('mongodb://localhost:27017/chatapp')
+	.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/chatapp')
 	.then(() => console.log('MongoDB connected'))
 	.catch(err => console.log(err))
 
