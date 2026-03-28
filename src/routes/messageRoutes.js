@@ -94,7 +94,7 @@ router.get('/:conversationId', authMiddleware, messageController.getMessages)
  *       200:
  *         description: Message marked as read
  *       403:
- *         description: Access denied
+ *         description: Ruxsat yoq
  */
 router.put(
 	'/:messageId/read',
@@ -120,7 +120,7 @@ router.put(
  *       200:
  *         description: Conversation unread messages marked as read
  *       403:
- *         description: Access denied
+ *         description: Ruxsat yoq
  */
 router.put(
 	'/conversations/:conversationId/read',
@@ -146,7 +146,7 @@ router.put(
  *       200:
  *         description: Message deleted
  *       403:
- *         description: Access denied
+ *         description: Ruxsat yoq
  */
 router.delete('/:messageId', authMiddleware, messageController.deleteMessage)
 
@@ -177,7 +177,7 @@ router.delete('/:messageId', authMiddleware, messageController.deleteMessage)
  *       200:
  *         description: Message edited
  *       403:
- *         description: Access denied
+ *         description: Ruxsat yoq
  */
 router.put('/:messageId', authMiddleware, messageController.editMessage)
 

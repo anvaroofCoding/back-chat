@@ -5,6 +5,11 @@ const cors = require('cors')
 const mongoose = require('mongoose')
 require('dotenv').config()
 
+const jwt = require('jsonwebtoken')
+const User = require('./models/User')
+const Session = require('./models/Session')
+const Conversation = require('./models/Conversation')
+
 const authRoutes = require('./routes/authRoutes')
 const conversationRoutes = require('./routes/conversationRoutes')
 const messageRoutes = require('./routes/messageRoutes')
@@ -117,12 +122,60 @@ const io = new Server(server, {
 
 setupRedisAdapter(io)
 
+// JWT auth for sockets — unauthenticated sockets still connect (guest mode)
+io.use(async (socket, next) => {
+	const token =
+		socket.handshake.auth?.token || socket.handshake.query?.token || null
+	if (!token) {
+		socket.data.userId = null
+		return next()
+	}
+	try {
+		const decoded = jwt.verify(token, process.env.JWT_SECRET)
+		const session = await Session.findOne({ token, isActive: true })
+		socket.data.userId = session ? decoded.id.toString() : null
+	} catch {
+		socket.data.userId = null
+	}
+	next()
+})
+
 // Make io accessible in routes
 app.set('io', io)
 
 io.on('connection', socket => {
 	console.log('User connected')
 	socket.data.activeConversations = new Set()
+
+	// Join personal room + broadcast online status to conversation partners
+	if (socket.data.userId) {
+		socket.join(`user:${socket.data.userId}`)
+		User.findByIdAndUpdate(socket.data.userId, { isOnline: true })
+			.exec()
+			.then(() =>
+				Conversation.find({ members: { $in: [socket.data.userId] } })
+					.select('members')
+					.lean()
+					.then(convs => {
+						const notifySet = new Set()
+						convs.forEach(c =>
+							c.members.forEach(m => {
+								const id = m.toString()
+								if (id !== socket.data.userId) notifySet.add(id)
+							}),
+						)
+						notifySet.forEach(uid =>
+							io.to(`user:${uid}`).emit('user:online', {
+								userId: socket.data.userId,
+								isOnline: true,
+								at: new Date().toISOString(),
+							}),
+						)
+					})
+					.catch(() => {}),
+			)
+			.catch(() => {})
+	}
 
 	const resolveParticipant = payload => {
 		if (!payload || typeof payload !== 'object') return null
@@ -299,6 +352,38 @@ io.on('connection', socket => {
 			for (const conversationId of socket.data.activeConversations) {
 				emitTypingStop(conversationId, socket.data.participant || null)
 			}
+		}
+		if (socket.data.userId) {
+			const now = new Date()
+			User.findByIdAndUpdate(socket.data.userId, {
+				isOnline: false,
+				lastSeen: now,
+			})
+				.exec()
+				.then(() =>
+					Conversation.find({ members: { $in: [socket.data.userId] } })
+						.select('members')
+						.lean()
+						.then(convs => {
+							const notifySet = new Set()
+							convs.forEach(c =>
+								c.members.forEach(m => {
+									const id = m.toString()
+									if (id !== socket.data.userId) notifySet.add(id)
+								}),
+							)
+							notifySet.forEach(uid =>
+								io.to(`user:${uid}`).emit('user:offline', {
+									userId: socket.data.userId,
+									isOnline: false,
+									lastSeen: now.toISOString(),
+									at: now.toISOString(),
+								}),
+							)
+						})
+						.catch(() => {}),
+				)
+				.catch(() => {})
 		}
 		console.log('User disconnected')
 	})

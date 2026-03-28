@@ -3,7 +3,7 @@ const c = require('../controllers/conversationController')
 const auth = require('../middleware/auth')
 
 const adminOnly = (req, res, next) => {
-	if (!req.user.isAdmin) return res.status(403).json({ message: 'Admin only' })
+	if (!req.user.isAdmin) return res.status(403).json({ message: 'Faqat admin uchun' })
 	next()
 }
 
@@ -148,7 +148,7 @@ router.get('/groups', auth, c.getGroupConversations)
  *       200:
  *         description: Conversation detail
  *       403:
- *         description: Access denied
+ *         description: Ruxsat yoq
  */
 router.get('/:conversationId', auth, c.getConversation)
 
@@ -170,7 +170,7 @@ router.get('/:conversationId', auth, c.getConversation)
  *       200:
  *         description: Deleted successfully
  *       403:
- *         description: Admin only
+ *         description: Faqat admin uchun
  */
 router.delete('/:conversationId', auth, adminOnly, c.deleteConversation)
 

@@ -1,4 +1,5 @@
 const User = require('../models/User')
+const Conversation = require('../models/Conversation')
 const multer = require('multer')
 const path = require('path')
 
@@ -60,7 +61,7 @@ exports.getUsers = async (req, res) => {
 			.sort({ firstname: 1, lastname: 1 })
 		res.json(users)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -69,12 +70,12 @@ exports.getUserProfileById = async (req, res) => {
 		const user = await User.findById(req.params.userId).select('-password')
 
 		if (!user) {
-			return res.status(404).json({ message: 'User not found' })
+			return res.status(404).json({ message: 'Foydalanuvchi topilmadi' })
 		}
 
 		res.json(user)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -83,7 +84,7 @@ exports.getProfile = async (req, res) => {
 		const user = await User.findById(req.user.id).select('-password')
 		res.json(user)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -100,8 +101,33 @@ exports.updateProfile = async (req, res) => {
 		const user = await User.findByIdAndUpdate(req.user.id, updateData, {
 			new: true,
 		}).select('-password')
+
+		const io = req.app.get('io')
+		const convs = await Conversation.find({ members: { $in: [req.user.id] } })
+			.select('members')
+			.lean()
+		const notifySet = new Set()
+		convs.forEach(c =>
+			c.members.forEach(m => {
+				const id = m.toString()
+				if (id !== req.user.id) notifySet.add(id)
+			}),
+		)
+		notifySet.forEach(uid =>
+			io.to(`user:${uid}`).emit('user:updated', {
+				userId: req.user.id,
+				firstname: user.firstname,
+				lastname: user.lastname,
+				avatar: user.avatar,
+				biography: user.biography,
+				job: user.job,
+				isOnline: user.isOnline,
+				updatedAt: user.updatedAt,
+			}),
+		)
+
 		res.json(user)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }

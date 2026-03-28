@@ -68,7 +68,7 @@ router.get('/', authMiddleware, groupController.getGroups)
  *       401:
  *         description: Unauthorized
  *       404:
- *         description: Group not found
+ *         description: Guruh topilmadi
  */
 router.get('/:groupId', authMiddleware, groupController.getGroup)
 

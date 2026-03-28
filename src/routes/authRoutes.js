@@ -41,7 +41,7 @@ const authController = require('../controllers/authController')
  *       200:
  *         description: User registered successfully
  *       400:
- *         description: User already exists
+ *         description: Foydalanuvchi allaqachon mavjud
  */
 router.post('/register', authController.register)
 
@@ -154,7 +154,7 @@ router.post('/logout', authController.logout)
  *       201:
  *         description: Admin created
  *       400:
- *         description: User already exists
+ *         description: Foydalanuvchi allaqachon mavjud
  */
 router.post('/bootstrap-admin', authController.bootstrapAdmin)
 

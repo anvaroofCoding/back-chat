@@ -61,14 +61,14 @@ exports.sendMessage = async (req, res) => {
 			if (conversation) {
 				targetConversationId = conversation._id
 			} else {
-				return res.status(404).json({ message: 'Group conversation not found' })
+				return res.status(404).json({ message: 'Guruh suhbati topilmadi' })
 			}
 		}
 
 		if (!targetConversationId) {
 			return res
 				.status(400)
-				.json({ message: 'conversationId or groupId is required' })
+				.json({ message: 'conversationId yoki groupId majburiy' })
 		}
 
 		let replyToMessageId = null
@@ -77,7 +77,7 @@ exports.sendMessage = async (req, res) => {
 			if (!repliedMessage) {
 				return res
 					.status(404)
-					.json({ message: 'Reply target message not found' })
+					.json({ message: 'Javob berilayotgan xabar topilmadi' })
 			}
 
 			if (
@@ -85,7 +85,8 @@ exports.sendMessage = async (req, res) => {
 				targetConversationId.toString()
 			) {
 				return res.status(400).json({
-					message: 'Reply target message must belong to the same conversation',
+					message:
+						'Javob berilayotgan xabar shu suhbatga tegishli bolishi kerak',
 				})
 			}
 
@@ -150,7 +151,8 @@ exports.sendMessage = async (req, res) => {
 
 		res.json(message)
 	} catch (error) {
-		res.status(500).json(error)
+		console.error('sendMessage error:', error.message)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -165,7 +167,7 @@ exports.deleteMessage = async (req, res) => {
 			populate: { path: 'groupId', select: 'owner' },
 		})
 		if (!message) {
-			return res.status(404).json({ message: 'Message not found' })
+			return res.status(404).json({ message: 'Xabar topilmadi' })
 		}
 
 		const isSender = message.sender.toString() === userId
@@ -175,7 +177,8 @@ exports.deleteMessage = async (req, res) => {
 
 		if (!isSender && !isAdmin && !isGroupOwner) {
 			return res.status(403).json({
-				message: 'Only sender, group owner, or admin can delete message',
+				message:
+					'Xabarni faqat yuboruvchi, guruh egasi yoki admin ochira oladi',
 			})
 		}
 
@@ -197,7 +200,7 @@ exports.deleteMessage = async (req, res) => {
 
 		res.json({ message: 'Message deleted' })
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -213,7 +216,7 @@ exports.editMessage = async (req, res) => {
 			populate: { path: 'groupId', select: 'owner' },
 		})
 		if (!message) {
-			return res.status(404).json({ message: 'Message not found' })
+			return res.status(404).json({ message: 'Xabar topilmadi' })
 		}
 
 		const isSender = message.sender.toString() === userId
@@ -223,7 +226,8 @@ exports.editMessage = async (req, res) => {
 
 		if (!isSender && !isAdmin && !isGroupOwner) {
 			return res.status(403).json({
-				message: 'Only sender, group owner, or admin can edit message',
+				message:
+					'Xabarni faqat yuboruvchi, guruh egasi yoki admin tahrir qila oladi',
 			})
 		}
 
@@ -244,7 +248,7 @@ exports.editMessage = async (req, res) => {
 
 		res.json(message)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -257,13 +261,13 @@ exports.getMessages = async (req, res) => {
 		// verify access
 		const conversation = await Conversation.findById(conversationId)
 		if (!conversation)
-			return res.status(404).json({ message: 'Conversation not found' })
+			return res.status(404).json({ message: 'Suhbat topilmadi' })
 
 		const isMember = conversation.members.some(
 			m => m.toString() === currentUser,
 		)
 		if (!isMember && !isAdmin) {
-			return res.status(403).json({ message: 'Access denied' })
+			return res.status(403).json({ message: 'Ruxsat yoq' })
 		}
 
 		const messages = await Message.find({ conversationId })
@@ -277,7 +281,7 @@ exports.getMessages = async (req, res) => {
 
 		res.json(messages)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -288,13 +292,13 @@ exports.markMessageAsRead = async (req, res) => {
 		const isAdmin = req.user.isAdmin
 
 		const message = await Message.findById(messageId).populate('conversationId')
-		if (!message) return res.status(404).json({ message: 'Message not found' })
+		if (!message) return res.status(404).json({ message: 'Xabar topilmadi' })
 
 		const isMember = message.conversationId.members.some(
 			m => m.toString() === currentUser,
 		)
 		if (!isMember && !isAdmin) {
-			return res.status(403).json({ message: 'Access denied' })
+			return res.status(403).json({ message: 'Ruxsat yoq' })
 		}
 
 		if (!message.is_read || !message.read) {
@@ -314,7 +318,7 @@ exports.markMessageAsRead = async (req, res) => {
 
 		res.json(message)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -326,13 +330,13 @@ exports.markConversationAsRead = async (req, res) => {
 
 		const conversation = await Conversation.findById(conversationId)
 		if (!conversation)
-			return res.status(404).json({ message: 'Conversation not found' })
+			return res.status(404).json({ message: 'Suhbat topilmadi' })
 
 		const isMember = conversation.members.some(
 			m => m.toString() === currentUser,
 		)
 		if (!isMember && !isAdmin) {
-			return res.status(403).json({ message: 'Access denied' })
+			return res.status(403).json({ message: 'Ruxsat yoq' })
 		}
 
 		const unreadMessages = await Message.find({
@@ -362,6 +366,6 @@ exports.markConversationAsRead = async (req, res) => {
 			updatedCount: unreadMessages.length,
 		})
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }

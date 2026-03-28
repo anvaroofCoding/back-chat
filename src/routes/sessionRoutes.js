@@ -21,7 +21,7 @@ const auth = require('../middleware/auth')
  *       200:
  *         description: List of active sessions
  *       403:
- *         description: Access denied
+ *         description: Ruxsat yoq
  */
 router.get('/:userId', auth, sessionController.getActiveSessions)
 
@@ -43,7 +43,7 @@ router.get('/:userId', auth, sessionController.getActiveSessions)
  *       200:
  *         description: Logged out successfully
  *       403:
- *         description: Access denied
+ *         description: Ruxsat yoq
  */
 router.post('/:sessionId/logout', auth, sessionController.logoutSession)
 

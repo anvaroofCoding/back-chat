@@ -4,7 +4,7 @@ const auth = require('../middleware/auth')
 
 const adminOnly = (req, res, next) => {
 	if (!req.user.isAdmin)
-		return res.status(403).json({ message: 'Admin access required' })
+		return res.status(403).json({ message: 'Admin huquqi talab qilinadi' })
 	next()
 }
 

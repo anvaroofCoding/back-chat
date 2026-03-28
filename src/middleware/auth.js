@@ -6,7 +6,7 @@ module.exports = async (req, res, next) => {
 	const token = req.header('Authorization')?.replace('Bearer ', '')
 
 	if (!token) {
-		return res.status(401).json({ message: 'No token provided' })
+		return res.status(401).json({ message: 'Token taqdim etilmagan' })
 	}
 
 	try {
@@ -15,14 +15,14 @@ module.exports = async (req, res, next) => {
 		// Check if session exists and is active
 		const session = await Session.findOne({ token, isActive: true })
 		if (!session) {
-			return res.status(401).json({ message: 'Session expired or invalid' })
+			return res.status(401).json({ message: 'Sessiya muddati tugagan yoki yaroqsiz' })
 		}
 
 		// Load important user flags so we can enforce admin/approved status
 		const user = await User.findById(decoded.id).select('isAdmin isApproved')
 
 		if (!user) {
-			return res.status(401).json({ message: 'Invalid token' })
+			return res.status(401).json({ message: 'Token yaroqsiz' })
 		}
 
 		req.user = {
@@ -33,6 +33,6 @@ module.exports = async (req, res, next) => {
 
 		next()
 	} catch (error) {
-		res.status(401).json({ message: 'Invalid token' })
+		res.status(401).json({ message: 'Token yaroqsiz' })
 	}
 }

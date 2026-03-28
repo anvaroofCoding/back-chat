@@ -51,7 +51,7 @@ router.get('/', userController.getUsers)
  *       200:
  *         description: User profile
  *       404:
- *         description: User not found
+ *         description: Foydalanuvchi topilmadi
  */
 /**
  * @swagger

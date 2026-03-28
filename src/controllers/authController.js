@@ -11,7 +11,7 @@ exports.register = async (req, res) => {
 		const existingUser = await User.findOne({ email })
 
 		if (existingUser) {
-			return res.status(400).json({ message: 'User already exists' })
+			return res.status(400).json({ message: 'Foydalanuvchi allaqachon mavjud' })
 		}
 
 		const hashedPassword = await bcrypt.hash(password, 10)
@@ -28,7 +28,7 @@ exports.register = async (req, res) => {
 
 		res.json(user)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -39,17 +39,23 @@ exports.login = async (req, res) => {
 		const user = await User.findOne({ email })
 
 		if (!user) {
-			return res.status(400).json({ message: 'User not found' })
+			return res.status(400).json({ message: 'Foydalanuvchi topilmadi' })
 		}
 
 		if (!user.isApproved) {
-			return res.status(403).json({ message: 'Account not approved yet' })
+			return res.status(403).json({ message: 'Hisob hali tasdiqlanmagan' })
+		}
+
+		if (!user.password) {
+			return res.status(400).json({
+				message: 'Bu hisob uchun parol orqali kirish mavjud emas',
+			})
 		}
 
 		const isMatch = await bcrypt.compare(password, user.password)
 
 		if (!isMatch) {
-			return res.status(400).json({ message: 'Wrong password' })
+			return res.status(400).json({ message: 'Parol notogri' })
 		}
 
 		const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
@@ -79,10 +85,12 @@ exports.login = async (req, res) => {
 				avatar: user.avatar,
 				isApproved: user.isApproved,
 				isAdmin: user.isAdmin,
+				role: user.isAdmin ? 'admin' : 'user',
 			},
 		})
 	} catch (error) {
-		res.status(500).json(error)
+		console.error('Login error:', error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -94,7 +102,7 @@ exports.logout = async (req, res) => {
 
 		res.json({ message: 'Logged out successfully' })
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -105,7 +113,7 @@ exports.bootstrapAdmin = async (req, res) => {
 
 		const existingUser = await User.findOne({ email })
 		if (existingUser) {
-			return res.status(400).json({ message: 'User already exists' })
+			return res.status(400).json({ message: 'Foydalanuvchi allaqachon mavjud' })
 		}
 
 		const hashedPassword = await bcrypt.hash(password, 10)
@@ -127,12 +135,20 @@ exports.bootstrapAdmin = async (req, res) => {
 				id: admin._id,
 				firstname: admin.firstname,
 				lastname: admin.lastname,
+				birthday: admin.birthday,
 				email: admin.email,
+				biography: admin.biography,
+				job: admin.job,
+				avatar: admin.avatar,
 				isAdmin: admin.isAdmin,
 				isApproved: admin.isApproved,
+				isOnline: admin.isOnline,
+				lastSeen: admin.lastSeen,
+				createdAt: admin.createdAt,
+				updatedAt: admin.updatedAt,
 			},
 		})
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }

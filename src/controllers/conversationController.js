@@ -29,7 +29,9 @@ exports.createPrivateConversation = async (req, res) => {
 		const currentUser = req.user.id
 
 		if (userId === currentUser) {
-			return res.status(400).json({ message: 'Cannot chat with yourself' })
+			return res
+				.status(400)
+				.json({ message: 'Ozingiz bilan chat ochib bolmaydi' })
 		}
 
 		const existing = await Conversation.findOne({
@@ -50,9 +52,15 @@ exports.createPrivateConversation = async (req, res) => {
 		})
 
 		await conversation.populate('members', 'firstname lastname avatar isOnline')
+
+		const io = req.app.get('io')
+		const convPayload = conversation.toObject()
+		io.to(`user:${currentUser}`).emit('conversation:new', convPayload)
+		io.to(`user:${userId}`).emit('conversation:new', convPayload)
+
 		res.status(201).json(conversation)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -60,9 +68,13 @@ exports.createPrivateConversation = async (req, res) => {
 exports.getPrivateConversations = async (req, res) => {
 	try {
 		const currentUser = req.user.id
+		const isAdmin = req.user.isAdmin
 		const { search, from, to } = req.query
 
-		const filter = { type: 'private', members: { $in: [currentUser] } }
+		const filter = { type: 'private' }
+		if (!isAdmin) {
+			filter.members = { $in: [currentUser] }
+		}
 		if (from || to) {
 			filter.lastMessageAt = {}
 			if (from) filter.lastMessageAt.$gte = new Date(from)
@@ -82,7 +94,7 @@ exports.getPrivateConversations = async (req, res) => {
 			conversations = conversations.filter(c =>
 				c.members.some(
 					m =>
-						m._id.toString() !== currentUser &&
+						(isAdmin || m._id.toString() !== currentUser) &&
 						`${m.firstname} ${m.lastname}`.toLowerCase().includes(s),
 				),
 			)
@@ -95,7 +107,7 @@ exports.getPrivateConversations = async (req, res) => {
 
 		res.json(conversationsWithUnread)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -105,9 +117,13 @@ exports.getPrivateConversations = async (req, res) => {
 exports.getGroupConversations = async (req, res) => {
 	try {
 		const currentUser = req.user.id
+		const isAdmin = req.user.isAdmin
 		const { search, from, to } = req.query
 
-		const filter = { type: 'group', members: { $in: [currentUser] } }
+		const filter = { type: 'group' }
+		if (!isAdmin) {
+			filter.members = { $in: [currentUser] }
+		}
 		if (from || to) {
 			filter.lastMessageAt = {}
 			if (from) filter.lastMessageAt.$gte = new Date(from)
@@ -137,7 +153,7 @@ exports.getGroupConversations = async (req, res) => {
 
 		res.json(conversationsWithUnread)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -148,9 +164,13 @@ exports.getGroupConversations = async (req, res) => {
 exports.getConversations = async (req, res) => {
 	try {
 		const currentUser = req.user.id
+		const isAdmin = req.user.isAdmin
 		const { type, search, from, to } = req.query
 
-		const filter = { members: { $in: [currentUser] } }
+		const filter = {}
+		if (!isAdmin) {
+			filter.members = { $in: [currentUser] }
+		}
 
 		if (type === 'private') filter.type = 'private'
 		else if (type === 'group') filter.type = 'group'
@@ -179,7 +199,7 @@ exports.getConversations = async (req, res) => {
 				}
 				return c.members.some(
 					m =>
-						m._id.toString() !== currentUser &&
+						(isAdmin || m._id.toString() !== currentUser) &&
 						`${m.firstname} ${m.lastname}`.toLowerCase().includes(s),
 				)
 			})
@@ -192,7 +212,7 @@ exports.getConversations = async (req, res) => {
 
 		res.json(conversationsWithUnread)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -220,13 +240,13 @@ exports.getConversation = async (req, res) => {
 			})
 
 		if (!conversation)
-			return res.status(404).json({ message: 'Conversation not found' })
+			return res.status(404).json({ message: 'Suhbat topilmadi' })
 
 		const isMember = conversation.members.some(
 			m => m._id.toString() === currentUser,
 		)
 		if (!isMember && !isAdmin) {
-			return res.status(403).json({ message: 'Access denied' })
+			return res.status(403).json({ message: 'Ruxsat yoq' })
 		}
 
 		const unreadCount = await Message.countDocuments({
@@ -240,7 +260,7 @@ exports.getConversation = async (req, res) => {
 			unreadCount,
 		})
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -251,13 +271,21 @@ exports.deleteConversation = async (req, res) => {
 
 		const conversation = await Conversation.findById(conversationId)
 		if (!conversation)
-			return res.status(404).json({ message: 'Conversation not found' })
+			return res.status(404).json({ message: 'Suhbat topilmadi' })
+
+		const io = req.app.get('io')
+		conversation.members.forEach(memberId => {
+			io.to(`user:${memberId.toString()}`).emit('conversation:deleted', {
+				conversationId,
+				deletedAt: new Date().toISOString(),
+			})
+		})
 
 		await Message.deleteMany({ conversationId })
 		await Conversation.findByIdAndDelete(conversationId)
 
 		res.json({ message: 'Conversation and all messages deleted' })
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }

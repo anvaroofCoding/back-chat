@@ -44,22 +44,27 @@ exports.createGroup = async (req, res) => {
 			groupId: group._id,
 		})
 
+		const io = req.app.get('io')
+		io.to(`user:${owner}`).emit('group:created', { group, conversation })
+
 		res.json({ group, conversation })
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
 exports.getGroups = async (req, res) => {
 	try {
 		const userId = req.user.id
-		const groups = await Group.find({ members: { $in: [userId] } }).populate(
+		const isAdmin = req.user.isAdmin
+		const filter = isAdmin ? {} : { members: { $in: [userId] } }
+		const groups = await Group.find(filter).populate(
 			'owner',
 			'firstname lastname',
 		)
 		res.json(groups)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -70,11 +75,11 @@ exports.getGroup = async (req, res) => {
 			.populate('owner', 'firstname lastname')
 			.populate('members', 'firstname lastname email')
 		if (!group) {
-			return res.status(404).json({ message: 'Group not found' })
+			return res.status(404).json({ message: 'Guruh topilmadi' })
 		}
 		res.json(group)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -87,12 +92,12 @@ exports.updateGroup = async (req, res) => {
 
 		const group = await Group.findById(groupId)
 		if (!group) {
-			return res.status(404).json({ message: 'Group not found' })
+			return res.status(404).json({ message: 'Guruh topilmadi' })
 		}
 		if (group.owner.toString() !== userId && !isAdmin) {
 			return res
 				.status(403)
-				.json({ message: 'Only owner or admin can update group' })
+				.json({ message: 'Guruhni faqat egasi yoki admin yangilay oladi' })
 		}
 
 		const updateData = { name, description }
@@ -104,9 +109,16 @@ exports.updateGroup = async (req, res) => {
 		const updatedGroup = await Group.findByIdAndUpdate(groupId, updateData, {
 			new: true,
 		})
+
+		const io = req.app.get('io')
+		const updConv = await Conversation.findOne({ groupId }).select('_id').lean()
+		if (updConv) {
+			io.to(updConv._id.toString()).emit('group:updated', updatedGroup)
+		}
+
 		res.json(updatedGroup)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -118,20 +130,37 @@ exports.deleteGroup = async (req, res) => {
 
 		const group = await Group.findById(groupId)
 		if (!group) {
-			return res.status(404).json({ message: 'Group not found' })
+			return res.status(404).json({ message: 'Guruh topilmadi' })
 		}
 		if (group.owner.toString() !== userId && !isAdmin) {
 			return res
 				.status(403)
-				.json({ message: 'Only owner or admin can delete group' })
+				.json({ message: 'Guruhni faqat egasi yoki admin ochira oladi' })
 		}
+
+		const io = req.app.get('io')
+		const delConv = await Conversation.findOne({ groupId: group._id })
+			.select('_id')
+			.lean()
+		if (delConv) {
+			io.to(delConv._id.toString()).emit('group:deleted', {
+				groupId,
+				deletedAt: new Date().toISOString(),
+			})
+		}
+		group.members.forEach(memberId => {
+			io.to(`user:${memberId.toString()}`).emit('group:deleted', {
+				groupId,
+				deletedAt: new Date().toISOString(),
+			})
+		})
 
 		await Group.findByIdAndDelete(groupId)
 		// Also delete related conversation
 		await Conversation.findOneAndDelete({ groupId })
 		res.json({ message: 'Group deleted' })
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -144,12 +173,12 @@ exports.addMember = async (req, res) => {
 
 		const group = await Group.findById(groupId)
 		if (!group) {
-			return res.status(404).json({ message: 'Group not found' })
+			return res.status(404).json({ message: 'Guruh topilmadi' })
 		}
 		if (group.owner.toString() !== ownerId && !isAdmin) {
 			return res
 				.status(403)
-				.json({ message: 'Only owner or admin can add members' })
+				.json({ message: 'Azo qoshishni faqat egasi yoki admin bajaradi' })
 		}
 
 		const rawUserIds = []
@@ -167,7 +196,8 @@ exports.addMember = async (req, res) => {
 		const uniqueUserIds = [...new Set(rawUserIds)]
 		if (uniqueUserIds.length === 0) {
 			return res.status(400).json({
-				message: 'Provide at least one user id in userId or userIds[]',
+				message:
+					'userId yoki userIds[] da kamida bitta foydalanuvchi ID sini yuboring',
 			})
 		}
 
@@ -176,7 +206,7 @@ exports.addMember = async (req, res) => {
 		)
 		if (invalidIds.length > 0) {
 			return res.status(400).json({
-				message: 'Some user ids are invalid',
+				message: 'Ayrim foydalanuvchi ID lari notogri',
 				invalidUserIds: invalidIds,
 			})
 		}
@@ -188,7 +218,7 @@ exports.addMember = async (req, res) => {
 		const missingUserIds = uniqueUserIds.filter(id => !foundUserIdSet.has(id))
 		if (missingUserIds.length > 0) {
 			return res.status(404).json({
-				message: 'Some users were not found',
+				message: 'Ayrim foydalanuvchilar topilmadi',
 				missingUserIds,
 			})
 		}
@@ -198,7 +228,7 @@ exports.addMember = async (req, res) => {
 
 		if (userIdsToAdd.length === 0) {
 			return res.status(400).json({
-				message: 'All provided users are already in group',
+				message: 'Berilgan foydalanuvchilarning barchasi allaqachon guruhda',
 			})
 		}
 
@@ -211,6 +241,24 @@ exports.addMember = async (req, res) => {
 			{ $addToSet: { members: { $each: userIdsToAdd } } },
 		)
 
+		const io = req.app.get('io')
+		const addConv = await Conversation.findOne({ groupId }).select('_id').lean()
+		if (addConv) {
+			const roomId = addConv._id.toString()
+			io.to(roomId).emit('group:member_added', {
+				groupId,
+				addedUserIds: userIdsToAdd,
+				addedBy: ownerId,
+				at: new Date().toISOString(),
+			})
+			userIdsToAdd.forEach(uid => {
+				io.to(`user:${uid}`).emit('conversation:new', {
+					conversationId: addConv._id,
+					groupId,
+				})
+			})
+		}
+
 		res.json({
 			message: 'Members added successfully',
 			addedCount: userIdsToAdd.length,
@@ -218,7 +266,7 @@ exports.addMember = async (req, res) => {
 			group,
 		})
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -230,26 +278,43 @@ exports.removeMember = async (req, res) => {
 
 		const group = await Group.findById(groupId)
 		if (!group) {
-			return res.status(404).json({ message: 'Group not found' })
+			return res.status(404).json({ message: 'Guruh topilmadi' })
 		}
 		if (group.owner.toString() !== ownerId && !isAdmin) {
 			return res
 				.status(403)
-				.json({ message: 'Only owner or admin can remove members' })
+				.json({ message: 'Azoni faqat egasi yoki admin olib tashlay oladi' })
 		}
 
 		group.members = group.members.filter(id => id.toString() !== userId)
 		await group.save()
 
 		// Update conversation members
+		const remConv = await Conversation.findOne({ groupId: group._id })
+			.select('_id')
+			.lean()
 		await Conversation.findOneAndUpdate(
 			{ groupId },
 			{ $pull: { members: userId } },
 		)
 
+		const io = req.app.get('io')
+		if (remConv) {
+			io.to(remConv._id.toString()).emit('group:member_removed', {
+				groupId,
+				removedUserId: userId,
+				removedBy: ownerId,
+				at: new Date().toISOString(),
+			})
+		}
+		io.to(`user:${userId}`).emit('group:kicked', {
+			groupId,
+			at: new Date().toISOString(),
+		})
+
 		res.json(group)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -262,17 +327,17 @@ exports.transferOwnership = async (req, res) => {
 
 		const group = await Group.findById(groupId)
 		if (!group) {
-			return res.status(404).json({ message: 'Group not found' })
+			return res.status(404).json({ message: 'Guruh topilmadi' })
 		}
 		if (group.owner.toString() !== currentOwnerId && !isAdmin) {
 			return res
 				.status(403)
-				.json({ message: 'Only owner or admin can transfer ownership' })
+				.json({ message: 'Egalikni faqat egasi yoki admin otkaza oladi' })
 		}
 
 		const newOwner = await User.findById(newOwnerId)
 		if (!newOwner) {
-			return res.status(404).json({ message: 'New owner not found' })
+			return res.status(404).json({ message: 'Yangi egasi topilmadi' })
 		}
 
 		// If new owner not in group, add them
@@ -287,8 +352,21 @@ exports.transferOwnership = async (req, res) => {
 		group.owner = newOwnerId
 		await group.save()
 
+		const io = req.app.get('io')
+		const ownConv = await Conversation.findOne({ groupId: group._id })
+			.select('_id')
+			.lean()
+		if (ownConv) {
+			io.to(ownConv._id.toString()).emit('group:updated', group)
+		}
+		io.to(`user:${newOwnerId}`).emit('group:ownership_transferred', {
+			groupId: group._id,
+			newOwnerId,
+			at: new Date().toISOString(),
+		})
+
 		res.json(group)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }

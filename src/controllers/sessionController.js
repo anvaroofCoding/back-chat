@@ -8,7 +8,7 @@ exports.getActiveSessions = async (req, res) => {
 
 		// Check if user is admin or requesting own sessions
 		if (!req.user.isAdmin && req.user.id !== userId) {
-			return res.status(403).json({ message: 'Access denied' })
+			return res.status(403).json({ message: 'Ruxsat yoq' })
 		}
 
 		const sessions = await Session.find({ userId, isActive: true }).populate(
@@ -18,7 +18,7 @@ exports.getActiveSessions = async (req, res) => {
 
 		res.json(sessions)
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -30,12 +30,12 @@ exports.logoutSession = async (req, res) => {
 		const session = await Session.findById(sessionId)
 
 		if (!session) {
-			return res.status(404).json({ message: 'Session not found' })
+			return res.status(404).json({ message: 'Sessiya topilmadi' })
 		}
 
 		// Check if user is admin or owns the session
 		if (!req.user.isAdmin && session.userId.toString() !== req.user.id) {
-			return res.status(403).json({ message: 'Access denied' })
+			return res.status(403).json({ message: 'Ruxsat yoq' })
 		}
 
 		session.isActive = false
@@ -43,7 +43,7 @@ exports.logoutSession = async (req, res) => {
 
 		res.json({ message: 'Logged out from session' })
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
 
@@ -59,6 +59,6 @@ exports.logoutOtherSessions = async (req, res) => {
 
 		res.json({ message: 'Logged out from other sessions' })
 	} catch (error) {
-		res.status(500).json(error)
+		res.status(500).json({ message: 'Serverda ichki xatolik' })
 	}
 }
